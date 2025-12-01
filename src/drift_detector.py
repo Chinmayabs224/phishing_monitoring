@@ -19,61 +19,70 @@ class DriftDetector:
         report = {}
         drift_detected = False
         
+        # Identify features present in both datasets
+        common_features = [col for col in self.reference_data.columns if col in new_data.columns]
+        
         # Numerical features: Use Kolmogorov-Smirnov (KS) Test
-        numerical_features = ['url_length', 'num_special_chars']
-        for feature in numerical_features:
-            ref_values = self.reference_data[feature]
-            new_values = new_data[feature]
-            
-            # KS Test
-            statistic, p_value = ks_2samp(ref_values, new_values)
-            
-            is_drift = p_value < self.p_value_threshold
-            report[feature] = {
-                'test': 'KS',
-                'p_value': p_value,
-                'drift_detected': is_drift
-            }
-            if is_drift:
-                drift_detected = True
-
+        numerical_features = [
+            'url_length', 'num_special_chars', 'domain_entropy', 
+            'vowel_consonant_ratio', 'digit_count', 'subdomain_count'
+        ]
+        
         # Categorical features: Use Chi-Square Test
-        # Note: Chi-Square requires contingency tables.
-        categorical_features = ['has_ip_address', 'https_token', 'is_suspicious_tld', 'has_suspicious_keyword']
-        for feature in categorical_features:
-            # Create contingency table
-            # We need to ensure all categories are present in both
-            ref_counts = self.reference_data[feature].value_counts().sort_index()
-            new_counts = new_data[feature].value_counts().sort_index()
-            
-            # Align indexes (handle missing categories in one batch)
-            all_categories = sorted(list(set(ref_counts.index) | set(new_counts.index)))
-            ref_freq = [ref_counts.get(cat, 0) for cat in all_categories]
-            new_freq = [new_counts.get(cat, 0) for cat in all_categories]
-            
-            # Chi-square test requires frequencies, but we can't just pass raw counts if sample sizes differ significantly 
-            # without normalization, but chi2_contingency expects count table.
-            # We construct a table: [[ref_cat1, ref_cat2], [new_cat1, new_cat2]]
-            contingency_table = [ref_freq, new_freq]
-            
-            # Remove columns with zero sum to avoid errors
-            contingency_table = np.array(contingency_table)
-            contingency_table = contingency_table[:, contingency_table.sum(axis=0) > 0]
+        categorical_features = [
+            'has_ip_address', 'https_token', 'is_suspicious_tld', 'has_suspicious_keyword'
+        ]
 
-            if contingency_table.shape[1] < 2:
-                # Not enough categories to test
-                p_value = 1.0
-            else:
-                chi2, p, dof, ex = chi2_contingency(contingency_table)
-                p_value = p
-            
-            is_drift = p_value < self.p_value_threshold
-            report[feature] = {
-                'test': 'Chi-Square',
-                'p_value': p_value,
-                'drift_detected': is_drift
-            }
-            if is_drift:
-                drift_detected = True
+        for feature in common_features:
+            try:
+                if feature in numerical_features:
+                    ref_values = self.reference_data[feature]
+                    new_values = new_data[feature]
+                    
+                    # KS Test
+                    statistic, p_value = ks_2samp(ref_values, new_values)
+                    test_name = 'KS'
+                    
+                elif feature in categorical_features:
+                    # Create contingency table
+                    ref_counts = self.reference_data[feature].value_counts().sort_index()
+                    new_counts = new_data[feature].value_counts().sort_index()
+                    
+                    # Align indexes
+                    all_categories = sorted(list(set(ref_counts.index) | set(new_counts.index)))
+                    ref_freq = [ref_counts.get(cat, 0) for cat in all_categories]
+                    new_freq = [new_counts.get(cat, 0) for cat in all_categories]
+                    
+                    contingency_table = np.array([ref_freq, new_freq])
+                    
+                    # Remove columns with zero sum
+                    contingency_table = contingency_table[:, contingency_table.sum(axis=0) > 0]
+
+                    if contingency_table.shape[1] < 2:
+                        p_value = 1.0
+                    else:
+                        chi2, p, dof, ex = chi2_contingency(contingency_table)
+                        p_value = p
+                    test_name = 'Chi-Square'
+                else:
+                    continue # Skip unknown features
+
+                is_drift = p_value < self.p_value_threshold
+                report[feature] = {
+                    'test': test_name,
+                    'p_value': float(p_value), # Ensure it's a float for JSON serialization
+                    'drift_detected': bool(is_drift)
+                }
+                if is_drift:
+                    drift_detected = True
+                    
+            except Exception as e:
+                print(f"Error checking drift for {feature}: {e}")
+                report[feature] = {
+                    'test': 'Error',
+                    'p_value': 1.0,
+                    'drift_detected': False,
+                    'error': str(e)
+                }
                 
         return drift_detected, report
