@@ -1,5 +1,6 @@
 import re
 import pandas as pd
+import math
 from urllib.parse import urlparse
 
 class URLFeatureExtractor:
@@ -16,6 +17,68 @@ class URLFeatureExtractor:
         
         self.suspicious_tlds = ['.top', '.xyz', '.info', '.club', '.live', '.online', '.site', '.cn', '.ru']
         self.suspicious_keywords = ['login', 'secure', 'account', 'update', 'verify', 'signin', 'banking', 'confirm', 'wallet']
+    
+    def _calculate_entropy(self, text):
+        """
+        Calculate Shannon entropy of a string to detect randomness.
+        Higher entropy = more random (suspicious).
+        """
+        if not text:
+            return 0
+        
+        # Count character frequencies
+        char_counts = {}
+        for char in text:
+            char_counts[char] = char_counts.get(char, 0) + 1
+        
+        # Calculate entropy
+        entropy = 0
+        text_len = len(text)
+        for count in char_counts.values():
+            probability = count / text_len
+            entropy -= probability * math.log2(probability)
+        
+        return entropy
+    
+    def _calculate_vowel_consonant_ratio(self, text):
+        """
+        Calculate ratio of vowels to total letters.
+        Normal English words have ~40% vowels.
+        Random strings often have unusual ratios.
+        """
+        if not text:
+            return 0
+        
+        vowels = 'aeiouAEIOU'
+        letters = [c for c in text if c.isalpha()]
+        
+        if not letters:
+            return 0
+        
+        vowel_count = sum(1 for c in letters if c in vowels)
+        return vowel_count / len(letters)
+    
+    def _count_digits(self, text):
+        """Count number of digits in text."""
+        return sum(1 for c in text if c.isdigit())
+    
+    def _count_subdomains(self, hostname):
+        """
+        Count number of subdomains.
+        Example: secure.login.paypal.com has 3 subdomains
+        """
+        if not hostname:
+            return 0
+        
+        # Remove port if present
+        if ':' in hostname:
+            hostname = hostname.split(':')[0]
+        
+        # Split by dots and count parts (minus the TLD and domain)
+        parts = hostname.split('.')
+        # Typical structure: [subdomain1, subdomain2, ..., domain, tld]
+        # Count all parts except last 2 (domain + tld)
+        return max(0, len(parts) - 2)
         
     def extract_features(self, url):
         """
@@ -48,6 +111,24 @@ class URLFeatureExtractor:
         
         # 6. Suspicious Keywords
         features['has_suspicious_keyword'] = 1 if any(keyword in url.lower() for keyword in self.suspicious_keywords) else 0
+        
+        # 7. Domain Entropy (randomness detection)
+        # Extract just the domain name (without TLD)
+        domain_parts = hostname.split('.')
+        if len(domain_parts) >= 2:
+            domain_name = domain_parts[-2]  # Get domain without TLD
+        else:
+            domain_name = hostname
+        features['domain_entropy'] = self._calculate_entropy(domain_name)
+        
+        # 8. Vowel-Consonant Ratio
+        features['vowel_consonant_ratio'] = self._calculate_vowel_consonant_ratio(domain_name)
+        
+        # 9. Digit Count
+        features['digit_count'] = self._count_digits(hostname)
+        
+        # 10. Subdomain Count
+        features['subdomain_count'] = self._count_subdomains(hostname)
         
         return features
     

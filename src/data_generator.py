@@ -39,8 +39,12 @@ class PhishingDataGenerator:
         - num_special_chars: Count of special characters like @, -, _.
         - has_ip_address: Binary (0 or 1).
         - https_token: Binary (0 or 1).
-        - is_suspicious_tld: Binary (0 or 1) - indicates suspicious top-level domain.
-        - has_suspicious_keyword: Binary (0 or 1) - indicates presence of suspicious keywords.
+        - is_suspicious_tld: Binary (0 or 1) - has suspicious top-level domain.
+        - has_suspicious_keyword: Binary (0 or 1) - contains suspicious keywords.
+        - domain_entropy: Float - Shannon entropy of domain name (randomness).
+        - vowel_consonant_ratio: Float - ratio of vowels to total letters.
+        - digit_count: Integer - number of digits in hostname.
+        - subdomain_count: Integer - number of subdomains.
         - is_phishing: Target variable (0: Legitimate, 1: Phishing).
         """
         
@@ -64,6 +68,10 @@ class PhishingDataGenerator:
         https_token = np.zeros(n_samples)
         is_suspicious_tld = np.zeros(n_samples)
         has_suspicious_keyword = np.zeros(n_samples)
+        domain_entropy = np.zeros(n_samples)
+        vowel_consonant_ratio = np.zeros(n_samples)
+        digit_count = np.zeros(n_samples)
+        subdomain_count = np.zeros(n_samples)
         
         for i in range(n_samples):
             if y[i] == 0: # Legitimate
@@ -72,14 +80,22 @@ class PhishingDataGenerator:
                 has_ip_address[i] = 0 if self.rng.random() > 0.01 else 1
                 https_token[i] = 1 if self.rng.random() > 0.1 else 0 # Most have HTTPS
                 is_suspicious_tld[i] = 0 if self.rng.random() > 0.05 else 1 # Rarely suspicious TLD
-                has_suspicious_keyword[i] = 0 if self.rng.random() > 0.1 else 1 # Rarely suspicious keywords
+                has_suspicious_keyword[i] = 0 if self.rng.random() > 0.1 else 1 # Sometimes has keywords
+                domain_entropy[i] = self.rng.normal(loc=2.5, scale=0.5) # Low entropy (readable words)
+                vowel_consonant_ratio[i] = self.rng.normal(loc=0.45, scale=0.1) # Normal vowel ratio
+                digit_count[i] = 0 if self.rng.random() > 0.1 else self.rng.integers(1, 3) # Few digits
+                subdomain_count[i] = self.rng.choice([0, 1], p=[0.7, 0.3]) # Usually 0-1 subdomains
             else: # Phishing
                 url_length[i] = self.rng.normal(loc=60, scale=15)
                 num_special_chars[i] = self.rng.poisson(lam=4)
                 has_ip_address[i] = 1 if self.rng.random() > 0.3 else 0
                 https_token[i] = 1 if self.rng.random() > 0.6 else 0 # Less likely to have valid HTTPS initially
-                is_suspicious_tld[i] = 1 if self.rng.random() > 0.4 else 0 # Often suspicious TLD
-                has_suspicious_keyword[i] = 1 if self.rng.random() > 0.3 else 0 # Often suspicious keywords
+                is_suspicious_tld[i] = 1 if self.rng.random() > 0.4 else 0 # More likely suspicious TLD
+                has_suspicious_keyword[i] = 1 if self.rng.random() > 0.3 else 0 # More likely has keywords
+                domain_entropy[i] = self.rng.normal(loc=3.8, scale=0.4) # High entropy (random chars)
+                vowel_consonant_ratio[i] = self.rng.normal(loc=0.25, scale=0.15) # Unusual vowel ratio
+                digit_count[i] = self.rng.poisson(lam=2) # More digits
+                subdomain_count[i] = self.rng.choice([0, 1, 2, 3], p=[0.3, 0.3, 0.25, 0.15]) # More subdomains
 
         # Apply Drift if requested
         if drift_type == 'concept_drift':
@@ -104,6 +120,10 @@ class PhishingDataGenerator:
             'https_token': https_token,
             'is_suspicious_tld': is_suspicious_tld,
             'has_suspicious_keyword': has_suspicious_keyword,
+            'domain_entropy': domain_entropy,
+            'vowel_consonant_ratio': vowel_consonant_ratio,
+            'digit_count': digit_count,
+            'subdomain_count': subdomain_count,
             'is_phishing': y
         })
         
