@@ -25,19 +25,19 @@ The SERQ API key can be configured in two ways:
 #### Option 1: Environment Variable (Recommended)
 ```bash
 # Windows PowerShell
-$env:SERQ_API_KEY="775bf88d18658f9e3b81d9766ee63b77e7dc88ad9f873519751d25c180558ae2"
+$env:SERQ_API_KEY="your_serq_api_key_here"
 
 # Windows CMD
-set SERQ_API_KEY=775bf88d18658f9e3b81d9766ee63b77e7dc88ad9f873519751d25c180558ae2
+set SERQ_API_KEY=your_serq_api_key_here
 
 # Linux/Mac
-export SERQ_API_KEY="775bf88d18658f9e3b81d9766ee63b77e7dc88ad9f873519751d25c180558ae2"
+export SERQ_API_KEY="your_serq_api_key_here"
 ```
 
-#### Option 2: Hardcoded in app.py
-The API key is already set in `src/web/app.py` as a fallback:
+#### Option 2: Read from `.env`
+The API key can be defined in your local `.env` file:
 ```python
-SERQ_API_KEY = os.getenv('SERQ_API_KEY', '775bf88d18658f9e3b81d9766ee63b77e7dc88ad9f873519751d25c180558ae2')
+SERQ_API_KEY=your_serq_api_key_here
 ```
 
 ### Custom API Endpoint
@@ -205,4 +205,3 @@ If your SERQ API uses a different format:
 - **Real-time Updates**: SERQ database is updated in real-time
 - **Fallback Protection**: ML model still works if SERQ is unavailable
 - **Hybrid Approach**: Combines real-time reputation with ML-based detection
-

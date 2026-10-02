@@ -37,8 +37,8 @@ except Exception as e:
 extractor = URLFeatureExtractor()
 
 # Initialize SERQ API Client
-# SERQ API key - can be set via environment variable SERQ_API_KEY or passed here
-SERQ_API_KEY = os.getenv('SERQ_API_KEY', '775bf88d18658f9e3b81d9766ee63b77e7dc88ad9f873519751d25c180558ae2')
+# SERQ API key - configured via environment variable SERQ_API_KEY
+SERQ_API_KEY = os.getenv('SERQ_API_KEY')
 serq_client = SERQAPIClient(api_key=SERQ_API_KEY)
 
 # Initialize URL Validator
@@ -99,8 +99,6 @@ def process_batch():
         
     response = clean_numpy(response)
     
-    response = clean_numpy(response)
-    
     return jsonify(response)
 
 @app.route('/api/predict', methods=['POST'])
@@ -109,9 +107,6 @@ def predict():
     Predicts if a URL is phishing or legitimate.
     Uses SERQ API for real-time reputation checking first, then falls back to model prediction.
     """
-    if phishing_model is None:
-        return jsonify({'error': 'Model not loaded'}), 500
-        
     data = request.json
     url = data.get('url')
     
@@ -190,17 +185,34 @@ def predict():
         # Convert to DataFrame for prediction (expected by model)
         features_df = pd.DataFrame([features])
         
-        # Predict using model
-        prediction = phishing_model.predict(features_df)[0]
-        probability = phishing_model.predict_proba(features_df)[0][1]  # Probability of class 1 (Phishing)
-        
-        # Determine method used
-        method = 'ML Model'
-        if serq_success and serq_result:
-            method = 'ML Model (SERQ inconclusive)'
-        elif not serq_success:
-            method = f'ML Model (SERQ unavailable: {serq_error})'
-        
+        # Predict using model (if available), otherwise use heuristic fallback
+        if phishing_model is not None:
+            prediction = phishing_model.predict(features_df)[0]
+            probability = phishing_model.predict_proba(features_df)[0][1]  # Probability of class 1 (Phishing)
+
+            method = 'ML Model'
+            if serq_success and serq_result:
+                method = 'ML Model (SERQ inconclusive)'
+            elif not serq_success:
+                method = f'ML Model (SERQ unavailable: {serq_error})'
+        else:
+            entropy_score = min(float(features.get('domain_entropy', 0)) / 6.0, 1.0) * 0.10
+            subdomain_score = min(float(features.get('subdomain_count', 0)) / 4.0, 1.0) * 0.05
+            probability = (
+                0.30 * float(features.get('is_suspicious_tld', 0))
+                + 0.25 * float(features.get('has_suspicious_keyword', 0))
+                + 0.20 * float(features.get('has_ip_address', 0))
+                + 0.10 * (1.0 - float(features.get('https_token', 0)))
+                + entropy_score
+                + subdomain_score
+            )
+            probability = max(0.0, min(1.0, probability))
+            prediction = probability >= 0.5
+
+            method = 'Heuristic Fallback (Model unavailable)'
+            if not serq_success:
+                method = f'{method}; SERQ unavailable: {serq_error}'
+
         result = {
             'url': url,
             'is_phishing': bool(prediction),

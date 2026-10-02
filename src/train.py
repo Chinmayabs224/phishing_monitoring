@@ -63,8 +63,6 @@ def train_model(use_real_data=True, sample_size=10000):
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
     print(f"Training with features: {X_train.columns.tolist()}")
     
     print("Training Random Forest Classifier...")
